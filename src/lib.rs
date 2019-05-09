@@ -55,6 +55,11 @@ macro_rules! svg_property {
 #[macro_export]
 macro_rules! svg_branch {
     ($l:literal)=>{stringify!($l)};
+    ((@if let $p:pat = $e:expr => $t:tt))=>{
+        if let $p = $e{
+            svg_list!($t)
+        }else {String::new()}
+    };
     ((@if $e:expr => $t:tt))=> {
         if $e{
             svg_list!($t)
@@ -137,6 +142,18 @@ mod tests {
             }
             )}),
             r#"<g x="4" y="3" ></g>"#
+        );
+    }
+
+    #[test]
+    fn test_if_let() {
+        let a = Some(5);
+        assert_eq!(
+            &svg_branch!(g x=4,y=3 => {( @if let Some(n) = a => {
+                {rect x=3,y=(n+2)}
+            }
+            )}),
+            r#"<g x="4" y="3" ><rect x="3" y="7" /></g>"#
         );
     }
 
