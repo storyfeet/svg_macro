@@ -1,6 +1,24 @@
 #[macro_export]
 macro_rules! svg{
-    ($w:expr,$h:expr=>$e:tt)=>(svg_branch!({
+    ($($t:tt)*)=>{{
+        let mut res = String::new();
+        svg_w!{res , $($t)*};
+        res
+    }};
+}
+
+#[macro_export]
+macro_rules! svg_branch {
+    ($($t:tt)*)=>{{
+        let mut res = String::new();
+        svg_branch_w!{res , $($t)*};
+        res
+    }};
+}
+
+#[macro_export]
+macro_rules! svg_w{
+    ($wr:ident,$w:expr,$h:expr=>$e:tt)=>(svg_branch_w!($wr,{
         svg width=$w, height=$h,
         xmlns="http://www.w3.org/2000/svg",
         "xmlns:xlink"= "http://www.w3.org/1999/xlink"
@@ -10,21 +28,26 @@ macro_rules! svg{
 
 #[macro_export]
 macro_rules! svg_list{
-    ({$($t:tt),*})=>({
-        let mut s = String::new();
+    ($wr:ident,{$($t:tt),*})=>({
         $(
-            s.push_str(&svg_branch!($t));
+            svg_branch_w!($wr,$t);
         )*
-        s
     });
-    ($l:literal)=>{$l};
-    (($i:ident))=>(stringify!($i));
-    (($s:expr))=>(stringify!($s));
+    ($wr:ident,$l:literal)=>{write!($wr,"{}",$l);};
+    ($wr:ident,($i:ident))=>(write!($wr,"{}",stringify!($i)));
+    ($wr:ident,($s:expr))=>(write!($wr,"{}",stringify!($s)));
 
 }
 
+//return &'static str with property name
 #[macro_export]
 macro_rules! svg_prop_name {
+    (w) => {
+        "width"
+    };
+    (h) => {
+        "height"
+    };
     ($i:ident) => {
         stringify!($i)
     };
@@ -36,6 +59,7 @@ macro_rules! svg_prop_name {
     };
 }
 
+//returns &'static str with property value
 #[macro_export]
 macro_rules! svg_property {
     ({ }) => {
@@ -52,56 +76,58 @@ macro_rules! svg_property {
     };
 }
 
+//writes to the writer given as $wr
 #[macro_export]
-macro_rules! svg_branch {
-    ($l:literal)=>{stringify!($l)};
-    ((@if let $p:pat = $e:expr => $t:tt))=>{
+macro_rules! svg_branch_w {
+    ($wr:ident,$l:literal)=>{write!($wr,"{}",stringify!($l))};
+    ($wr:ident,(@if let $p:pat = $e:expr => $t:tt))=>{
         if let $p = $e{
-            svg_list!($t)
-        }else {String::new()}
-    };
-    ((@if $e:expr => $t:tt))=> {
-        if $e{
-            svg_list!($t)
-        }else {String::new()}
-    };
-    ((@for $i:tt in $e:expr => $t:tt)) => {{
-        let mut res = String::new();
-        for $i in $e {
-            res.push_str(&svg_list!($t));
+            svg_list!($wr,$t);
         }
-        res
+    };
+    ($wr:ident,(@if $e:expr => $t:tt))=> {
+        if $e{
+            svg_list!($wr,$t);
+        }
+    };
+    ($wr:ident,(@for $i:tt in $e:expr => $t:tt)) => {{
+        for $i in $e {
+            svg_list!($wr,$t);
+        }
     }};
 
-    ($n:ident $($p:tt=$v:tt),* => $e:tt) => {
+    ($wr:ident,$n:ident $($p:tt=$v:tt),* => $e:tt) => {
         {
         let mut props = String::new();
         $(
         props.push_str(&format!("{}=\"{}\" ",svg_prop_name!($p),svg_property!($v)));
         )*
-        format!("<{0} {1}>{2}</{0}>",stringify!($n), props,svg_list!($e))
+        write!($wr,"<{} {}>",stringify!($n),props);
+        svg_list!($wr,$e);
+        write!($wr,"</{}>",stringify!($n));
         }
     };
-    ($n:ident $($p:ident=$v:expr),*)=>{
+    ($wr:ident,$n:ident $($p:ident=$v:expr),*)=>{
         {
         let mut props = String::new();
         $(
         props.push_str(&format!("{}=\"{}\" ",stringify!($p),$v));
         )*
-        format!("<{} {}/>",stringify!($n),props)
+        write!($wr,"<{} {}/>",stringify!($n),props)
         }
     };
-    ({$n:ident $($p:ident=$v:expr),*})=>{
-        svg_branch!{$n $($p=$v),*}
+    ($wr:ident,{$n:ident $($p:ident=$v:expr),*})=>{
+        svg_branch_w!{$wr,$n $($p=$v),*}
     };
-    ({$n:ident $($p:tt=$v:tt),* => $e:tt}) => {
-        svg_branch!{$n $($p=$v),* => $e};
+    ($wr:ident,{$n:ident $($p:tt=$v:tt),* => $e:tt}) => {
+        svg_branch_w!{$wr, $n $($p=$v),* => $e};
     };
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fmt::Write;
     #[test]
     fn top_level() {
         assert_eq!(
