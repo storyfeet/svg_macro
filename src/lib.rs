@@ -18,20 +18,20 @@ macro_rules! svg_branch {
 
 #[macro_export]
 macro_rules! svg_w{
-    ($wr:ident,$w:expr,$h:expr=>$e:tt)=>(svg_branch_w!($wr,{
-        svg width=$w, height=$h,
+    ($wr:ident,$($p:tt=$v:tt),* =>$($e:tt)+)=>(svg_branch_w!($wr,{
+        svg $($p=$v),*,
         xmlns="http://www.w3.org/2000/svg",
         "xmlns:xlink"= "http://www.w3.org/1999/xlink"
-            => $e
+            => $($e)*
     }));
 }
 
 #[macro_export]
 macro_rules! svg_list{
-    ($wr:ident,{$($t:tt),*})=>({
-        $(
-            svg_branch_w!($wr,$t);
-        )*
+    ($wr:ident,$h:tt)=>(svg_branch_w!($wr,$h));
+    ($wr:ident,$h:tt  $($t:tt)*)=>({
+        svg_branch_w!($wr,$h);
+        svg_list!($wr,$($t)*);
     });
     ($wr:ident,$l:literal)=>{write!($wr,"{}",$l);};
     ($wr:ident,($i:ident))=>(write!($wr,"{}",stringify!($i)));
@@ -79,31 +79,31 @@ macro_rules! svg_property {
 //writes to the writer given as $wr
 #[macro_export]
 macro_rules! svg_branch_w {
-    ($wr:ident,$l:literal)=>{write!($wr,"{}",stringify!($l))};
-    ($wr:ident,(@if let $p:pat = $e:expr => $t:tt))=>{
+    ($wr:ident,$l:literal)=>{write!($wr,"{}",$l)};
+    ($wr:ident,(@if let $p:pat = $e:expr => $($t:tt)*))=>{
         if let $p = $e{
-            svg_list!($wr,$t);
+            svg_list!($wr,$($t)*);
         }
     };
-    ($wr:ident,(@if $e:expr => $t:tt))=> {
+    ($wr:ident,(@if $e:expr => $($t:tt)*))=> {
         if $e{
-            svg_list!($wr,$t);
+            svg_list!($wr,$($t)*);
         }
     };
-    ($wr:ident,(@for $i:tt in $e:expr => $t:tt)) => {{
+    ($wr:ident,(@for $i:tt in $e:expr => $($t:tt)*)) => {{
         for $i in $e {
-            svg_list!($wr,$t);
+            svg_list!($wr,$($t)*);
         }
     }};
 
-    ($wr:ident,$n:ident $($p:tt=$v:tt),* => $e:tt) => {
+    ($wr:ident,$n:ident $($p:tt=$v:tt),* => $($e:tt)*) => {
         {
         let mut props = String::new();
         $(
         props.push_str(&format!("{}=\"{}\" ",svg_prop_name!($p),svg_property!($v)));
         )*
         write!($wr,"<{} {}>",stringify!($n),props);
-        svg_list!($wr,$e);
+        svg_list!($wr,$($e)*);
         write!($wr,"</{}>",stringify!($n));
         }
     };
@@ -131,10 +131,8 @@ mod tests {
     #[test]
     fn top_level() {
         assert_eq!(
-            &svg! {
-                5,7=>{
+            &svg! { w=5,h=7=>
                     {big x=4,y=5}
-                }
             },
             "<svg width=\"5\" height=\"7\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" ><big x=\"4\" y=\"5\" /></svg>"
         )
@@ -155,18 +153,18 @@ mod tests {
     fn test_control() {
         let a = true;
         assert_eq!(
-            &svg_branch!(g x=4,y=3 => {( @if a => {
+            &svg_branch!(g x=4,y=3 =>
+             ( @if a =>
                 {rect x=3,y=7}
-            }
-            )}),
+             )
+            ),
             r#"<g x="4" y="3" ><rect x="3" y="7" /></g>"#
         );
         let a = false;
         assert_eq!(
-            &svg_branch!(g x=4,y=3 => {( @if a => {
+            &svg_branch!(g x=4,y=3 => ( @if a =>
                 {rect x=3,y=7}
-            }
-            )}),
+            )),
             r#"<g x="4" y="3" ></g>"#
         );
     }
@@ -175,10 +173,10 @@ mod tests {
     fn test_if_let() {
         let a = Some(5);
         assert_eq!(
-            &svg_branch!(g x=4,y=3 => {( @if let Some(n) = a => {
+            &svg_branch!(g x=4,y=3 => ( @if let Some(n) = a =>
                 {rect x=3,y=(n+2)}
-            }
-            )}),
+            )
+            ),
             r#"<g x="4" y="3" ><rect x="3" y="7" /></g>"#
         );
     }
@@ -186,10 +184,9 @@ mod tests {
     #[test]
     fn test_loop() {
         assert_eq!(
-            &svg_branch!(g x=3 => { (@for x in 0..3 => {
+            &svg_branch!(g x=3 =>  (@for x in 0..3 =>
                 {rect x=(x*2)}
-            }
-            )}),
+            )),
             r#"<g x="3" ><rect x="0" /><rect x="2" /><rect x="4" /></g>"#
         );
     }
