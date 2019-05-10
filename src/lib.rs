@@ -2,7 +2,7 @@
 macro_rules! svg{
     ($($t:tt)*)=>{{
         let mut res = String::new();
-        svg_w!{res , $($t)*};
+        (svg_w!{res , $($t)*}).expect("svg_macro writing to string should not fail");
         res
     }};
 }
@@ -11,7 +11,7 @@ macro_rules! svg{
 macro_rules! svg_branch {
     ($($t:tt)*)=>{{
         let mut res = String::new();
-        svg_branch_w!{res , $($t)*};
+        (svg_branch_w!{res , $($t)*}).expect("svg_macro writing to string should not fail");
         res
     }};
 }
@@ -30,10 +30,10 @@ macro_rules! svg_w{
 macro_rules! svg_list{
     ($wr:ident,$h:tt)=>(svg_branch_w!($wr,$h));
     ($wr:ident,$h:tt  $($t:tt)*)=>({
-        svg_branch_w!($wr,$h);
-        svg_list!($wr,$($t)*);
+        svg_branch_w!($wr,$h)
+            .and_then(|_| svg_list!($wr,$($t)*))
     });
-    ($wr:ident,$l:literal)=>{write!($wr,"{}",$l);};
+    ($wr:ident,$l:literal)=>{write!($wr,"{}",$l)};
     ($wr:ident,($i:ident))=>(write!($wr,"{}",stringify!($i)));
     ($wr:ident,($s:expr))=>(write!($wr,"{}",stringify!($s)));
 
@@ -82,18 +82,26 @@ macro_rules! svg_branch_w {
     ($wr:ident,$l:literal)=>{write!($wr,"{}",$l)};
     ($wr:ident,(@if let $p:pat = $e:expr => $($t:tt)*))=>{
         if let $p = $e{
-            svg_list!($wr,$($t)*);
+            svg_list!($wr,$($t)*)
+        }else {
+            Ok(())
         }
     };
     ($wr:ident,(@if $e:expr => $($t:tt)*))=> {
         if $e{
-            svg_list!($wr,$($t)*);
+            svg_list!($wr,$($t)*)
+        }else {
+            Ok(())
         }
     };
     ($wr:ident,(@for $i:tt in $e:expr => $($t:tt)*)) => {{
+        let mut res = Ok(());
         for $i in $e {
-            svg_list!($wr,$($t)*);
+            if res.is_ok(){
+                res = svg_list!($wr,$($t)*);
+            }
         }
+        res
     }};
 
     ($wr:ident,$n:ident $($p:tt=$v:tt),* => $($e:tt)*) => {
@@ -102,9 +110,9 @@ macro_rules! svg_branch_w {
         $(
         props.push_str(&format!("{}=\"{}\" ",svg_prop_name!($p),svg_property!($v)));
         )*
-        write!($wr,"<{} {}>",stringify!($n),props);
-        svg_list!($wr,$($e)*);
-        write!($wr,"</{}>",stringify!($n));
+        write!($wr,"<{} {}>",stringify!($n),props)
+            .and_then(|_| svg_list!($wr,$($e)*))
+            .and_then(|_| write!($wr,"</{}>",stringify!($n)))
         }
     };
     ($wr:ident,$n:ident $($p:ident=$v:expr),*)=>{
@@ -190,4 +198,7 @@ mod tests {
             r#"<g x="3" ><rect x="0" /><rect x="2" /><rect x="4" /></g>"#
         );
     }
+
+
+
 }
