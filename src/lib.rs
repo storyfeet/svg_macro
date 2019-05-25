@@ -1,3 +1,6 @@
+pub mod writer;
+
+
 #[macro_export]
 macro_rules! svg{
     ($($t:tt)*)=>{{
